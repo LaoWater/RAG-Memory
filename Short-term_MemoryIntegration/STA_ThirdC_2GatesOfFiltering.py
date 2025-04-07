@@ -126,9 +126,17 @@ Keep under 3 sentences. Return only the summary."""
     @staticmethod
     def rank_memory_summaries(user_prompt: str, summaries: List[str]) -> List[Tuple[float, str]]:
         """Rank memory summaries using LLM-based attention mechanism"""
-        attention_prompt = f"Rank the following summaries based on their relevance to the prompt: {user_prompt}\n"
+        attention_prompt = (
+            f"Rank the following summaries based on their relevance to the prompt: {user_prompt}\n"
+            "Consider the following criteria for ranking:\n"
+            "- How well does the summary capture the core concepts of the prompt?\n"
+            "- Does the summary reflect the emotional tone of the prompt?\n"
+            "- Are key entities from the prompt present in the summary?\n"
+            "- Does the summary address any open questions from the prompt?\n"
+            "\n"
+        )
         attention_prompt += "\n".join([f"Summary {i+1}: {summary}" for i, summary in enumerate(summaries)])
-        attention_prompt += "\nReturn a list of scores for each summary."
+        attention_prompt += "\nReturn a list of scores for each summary, with higher scores indicating greater relevance."
 
         response = gemini_model.generate_content(attention_prompt)
         scores = [float(score) for score in response.text.split() if score.replace('.', '', 1).isdigit()]
