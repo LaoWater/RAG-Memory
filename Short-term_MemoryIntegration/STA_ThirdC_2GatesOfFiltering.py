@@ -123,6 +123,17 @@ class AgenticSystem:
 - Open questions
 Keep under 3 sentences. Return only the summary."""
 
+    def rank_memory_summaries(self, user_prompt: str, summaries: List[str]) -> List[Tuple[float, str]]:
+        """Rank memory summaries using LLM-based attention mechanism"""
+        attention_prompt = f"Rank the following summaries based on their relevance to the prompt: {user_prompt}\n"
+        attention_prompt += "\n".join([f"Summary {i+1}: {summary}" for i, summary in enumerate(summaries)])
+        attention_prompt += "\nReturn a list of scores for each summary."
+
+        response = gemini_model.generate_content(attention_prompt)
+        scores = [float(score) for score in response.text.split() if score.replace('.', '', 1).isdigit()]
+
+        return sorted(zip(scores, summaries), reverse=True)
+
     def generate_response(self, user_prompt: str) -> str:
         print(f"\n{'=' * 30}\nProcessing: {user_prompt}\n{'=' * 30}")
 
@@ -136,7 +147,15 @@ Keep under 3 sentences. Return only the summary."""
         )
         print(f"Found {len(summary_memories)} relevant summaries")
 
-        # Phase 2: Relevance Decision Making
+        # Phase 2: Rank Memory Summaries
+        print("\n[Phase 2] Rank Memory Summaries")
+        ranked_summaries = self.rank_memory_summaries(
+            user_prompt,
+            [m[1].content for m in summary_memories]
+        )
+        print(f"Ranked summaries: {ranked_summaries}")
+
+        # Phase 3: Relevance Decision Making
         print("\n[Phase 2] Relevance Decision")
         retrieval_decision = self._should_retrieve_full(
             user_prompt,
