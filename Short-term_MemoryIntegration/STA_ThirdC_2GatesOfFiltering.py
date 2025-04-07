@@ -133,7 +133,8 @@ Keep under 3 sentences. Return only the summary."""
             "- Does the summary reflect the emotional tone of the prompt?\n"
             "- Are key entities from the prompt present in the summary?\n"
             "- Does the summary address any open questions from the prompt?\n"
-            "\n"
+            "- Does the user prompt imply a continuation or expansion of previous topics?\n"
+            "- Consider the subtlety of context continuation when ranking.\n"
         )
         attention_prompt += "\n".join([f"Summary {i+1}: {summary}" for i, summary in enumerate(summaries)])
         attention_prompt += "\nReturn a list of scores for each summary, with higher scores indicating greater relevance."
