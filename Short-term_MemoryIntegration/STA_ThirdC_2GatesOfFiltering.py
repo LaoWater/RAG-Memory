@@ -23,7 +23,7 @@ FAISS_INDEX_F = faiss.IndexFlatIP(EMBEDDING_SIZE)
 # Configure Gemini
 gemini_api_key = os.getenv("GOOGLE_API_KEY")
 genai.configure(api_key=gemini_api_key)
-gemini_model = genai.GenerativeModel('gemini-2.5-pro-exp-03-25')
+gemini_model = genai.GenerativeModel('gemini-1.5-flash')
 
 
 class ConversationMemory:
@@ -51,7 +51,7 @@ class ConversationMemory:
 
         # Debug: Track memory storage
         print(f"\n=== Storing {memory_type} Memory [ID:{self.current_id}] ===")
-        print(f"Content: {text[:80]}...")
+        print(f"Content: {text}")
         print(f"Embedding Norm: {np.linalg.norm(embedding):.4f}")
 
         # Add to appropriate index
@@ -163,7 +163,7 @@ Keep under 3 sentences. Return only the summary."""
 
         # Generate Response
         print("\n[Generation] Using context:")
-        for c in context: print(f"| {c[:60]}...")
+        for c in context: print(f"| {c}")
         response = gemini_model.generate_content("\n\n".join(context))
 
         # Store Interaction
@@ -207,7 +207,7 @@ Respond ONLY with 'YES' or 'NO'."""
                 )
 
                 if similarity > self.similarity_threshold:
-                    print(f"Chunk match: {similarity:.2f} - {chunk[:60]}...")
+                    print(f"Chunk match: {similarity:.2f} - {chunk}")
                     relevant_chunks.append((
                         similarity,
                         f"[Relevance: {similarity:.2f}] {chunk}"
