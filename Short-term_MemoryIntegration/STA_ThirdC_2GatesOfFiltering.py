@@ -71,39 +71,19 @@ class ConversationMemory:
 
     def retrieve_memories(self, query_embedding: np.ndarray, memory_type: str,
                           top_k: int = 3, min_similarity: float = 0.2) -> List[Tuple[float, 'MemoryItem']]:
-        """Retrieve memories with cosine similarity filtering"""
-        scores, indices = self._search_index(query_embedding, memory_type, top_k)
-        results = []
+        """Retrieve memories using LLM-based ranking"""
+        summaries = [m.content for m in self.memories if m.type == memory_type]
+        ranked_summaries = AgenticSystem.rank_memory_summaries(query_embedding, summaries)
+        
+        # Filter based on a threshold
+        results = [(score, self.memories[idx]) for idx, (score, summary) in enumerate(ranked_summaries) if score > min_similarity]
+        
+        # Debug: Show ranked results
+        print(f"\n=== Ranked {memory_type} Memories ===")
+        for score, memory in results:
+            print(f"Memory ID {memory.id} - Score: {score:.4f} - Content: {memory.content}")
 
-
-        if indices.shape[0] == 0:  # No results
-            return results
-
-        # Debug: Show raw search results
-        print(f"\n=== Retrieving {memory_type} Memories ===")
-        print(f"Top {top_k} raw results:")
-
-
-
-        for i in range(top_k):
-            if indices[0][i] < 0:  # FAISS uses -1 for empty slots
-                continue
-            idx = indices[0][i]
-            if idx >= 0:
-                print(f"Index {idx} - Score: {scores[0][i]:.4f}")
-
-
-        for i in range(top_k):
-
-            similarity = scores[0][i]  # Direct use of cosine similarity
-            idx = indices[0][i]
-
-            if idx < len(self.memories) and similarity >= min_similarity:
-                results.append((similarity, self.memories[idx]))
-                # Debug: Show valid matches
-                print(f"Valid match: ID {self.memories[idx].id} - Similarity: {similarity:.4f}")
-
-        return sorted(results, key=lambda x: x[0], reverse=True)
+        return results
 
     @staticmethod
     def _search_index(query_embedding: np.ndarray, memory_type: str, k: int = 5):
