@@ -23,7 +23,7 @@ FAISS_INDEX_F = faiss.IndexFlatIP(EMBEDDING_SIZE)
 # Configure Gemini
 gemini_api_key = os.getenv("GOOGLE_API_KEY")
 genai.configure(api_key=gemini_api_key)
-gemini_model = genai.GenerativeModel('gemini-1.5-flash')
+gemini_model = genai.GenerativeModel('gemini-2.5-pro-exp-03-25')
 
 
 class ConversationMemory:
