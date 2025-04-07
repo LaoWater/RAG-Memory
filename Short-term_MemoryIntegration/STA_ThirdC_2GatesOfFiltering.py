@@ -9,6 +9,8 @@
 # ENTER: Attention ? - Mirroring the Mind, the retrieval, pondering what to retrieve, get full or summary - is happening with continous Attention mechanism.
 # Else, the first cycle example of Generate poem & Continue in second prompt - is not high enough attention to trigger the similarily mechanism
 
+# Hopaa - Attention LLM has improved threshold - and using prompt-engineering has improved it even further.
+# Must be careful in the prompt not to fall into over-fitting - keep it general
 
 import faiss
 import os
@@ -127,17 +129,19 @@ Keep under 3 sentences. Return only the summary."""
     def rank_memory_summaries(user_prompt: str, summaries: List[str]) -> List[Tuple[float, str]]:
         """Rank memory summaries using LLM-based attention mechanism"""
         attention_prompt = (
-            f"Rank the following summaries based on their relevance to the prompt: {user_prompt}\n"
-            "Consider the following criteria for ranking:\n"
-            "- How well does the summary capture the core concepts of the prompt?\n"
-            "- Does the summary reflect the emotional tone of the prompt?\n"
-            "- Are key entities from the prompt present in the summary?\n"
-            "- Does the summary address any open questions from the prompt?\n"
-            "- Does the user prompt imply a continuation or expansion of previous topics?\n"
-            "- Consider the subtlety of context continuation when ranking.\n"
+            f"Rank the following memory summaries based on their relevance to the user's current prompt: {user_prompt}\n"
+            "Carefully consider the following criteria for ranking:\n"
+            "- How well does the summary capture the core themes and concepts of the user's prompt?\n"
+            "- Does the summary reflect the emotional tone and intent expressed in the prompt?\n"
+            "- Does the summary include any key themes, entities, or metaphors mentioned in the prompt?\n"
+            "- Does the summary directly or subtly address any open-ended questions or implicit requests in the prompt?\n"
+            "- Is there an implicit need for continuation from previous interactions that is subtly hinted at in the prompt?\n"
+            "- Consider any **implicit context** that may need to be carried over (e.g.  a request for elaboration on a topic).\n"
+            "- Rank higher those summaries that maintain or extend the ongoing **conversation thread** or **expand upon previous ideas**, even if they do not directly repeat specific words.\n"
+            "- If the user seems to ask for a **continuation** or **variation** of a prior idea (e.g., 'Now make it more better' or 'Use X'), rank summaries that reflect this shift or expansion more highly."
         )
         attention_prompt += "\n".join([f"Summary {i+1}: {summary}" for i, summary in enumerate(summaries)])
-        attention_prompt += "\nReturn a list of scores for each summary, with higher scores indicating greater relevance."
+        attention_prompt += "\n\n - Return a list of scores for each summary from 1 to 3, with higher scores indicating greater relevance."
 
         response = gemini_model.generate_content(attention_prompt)
         scores = [float(score) for score in response.text.split() if score.replace('.', '', 1).isdigit()]
@@ -158,7 +162,7 @@ Keep under 3 sentences. Return only the summary."""
         )
         print(f"Found {len(summary_memories)} relevant summaries")
 
-        # Phase 2: Rank Memory Summaries
+        # Phase 2: Summary Memory Retrieval & Rank Memory Summaries
         print("\n[Phase 2] Rank Memory Summaries")
         ranked_summaries = self.rank_memory_summaries(
             user_prompt,
