@@ -166,7 +166,12 @@ Keep under 3 sentences. Return only the summary."""
         )
         print(f"Ranked summaries: {ranked_summaries}")
 
-        # Phase 3: Relevance Decision Making
+        # Phase 3: Retrieve Top-Ranked Summaries
+        print("\n[Phase 3] Retrieve Top-Ranked Summaries")
+        top_summaries = [summary for score, summary in ranked_summaries if score > self.similarity_threshold]
+        print(f"Top summaries: {top_summaries}")
+
+        # Phase 4: Relevance Decision Making
         print("\n[Phase 2] Relevance Decision")
         retrieval_decision = self._should_retrieve_full(
             user_prompt,
