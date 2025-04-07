@@ -5,6 +5,9 @@
 # (Long-Term needs time-dimension and decay and for H_A is not relevant with priority right now).
 
 # Issue at first Gate - why ?
+# Debugged intimately - found that scores are too low in many cases - of course - for the retrieval lacks understanding and comprehesion.
+# ENTER: Attention ? - Mirroring the Mind, the retrieval, pondering what to retrieve, get full or summary - is happening with continous Attention mechanism.
+# Else, the first cycle example of Generate poem & Continue in second prompt - is not high enough attention to trigger the similarily mechanism
 
 
 import faiss
