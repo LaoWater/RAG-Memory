@@ -134,6 +134,17 @@ Keep under 3 sentences. Return only the summary."""
 
         return sorted(zip(scores, summaries), reverse=True)
 
+    def rank_memory_summaries(self, user_prompt: str, summaries: List[str]) -> List[Tuple[float, str]]:
+        """Rank memory summaries using LLM-based attention mechanism"""
+        attention_prompt = f"Rank the following summaries based on their relevance to the prompt: {user_prompt}\n"
+        attention_prompt += "\n".join([f"Summary {i+1}: {summary}" for i, summary in enumerate(summaries)])
+        attention_prompt += "\nReturn a list of scores for each summary."
+
+        response = gemini_model.generate_content(attention_prompt)
+        scores = [float(score) for score in response.text.split() if score.replace('.', '', 1).isdigit()]
+
+        return sorted(zip(scores, summaries), reverse=True)
+
     def generate_response(self, user_prompt: str) -> str:
         print(f"\n{'=' * 30}\nProcessing: {user_prompt}\n{'=' * 30}")
 
