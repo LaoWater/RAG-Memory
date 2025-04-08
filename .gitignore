@@ -1,3 +1,4 @@
 .env
 .idea/
 ava-whatsapp-agent-course/
+.aider*

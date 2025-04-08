@@ -1,0 +1,28 @@
+./
+│
+└── index_storage/  (Directory containing persistent index data)
+    │
+    ├── 📄 default_vector_store.json
+    │   └── Purpose: Stores vector embeddings (numerical representations) of text chunks (nodes).
+    │       Contains: Embeddings, mapping from embedding ID to node ID.
+    │       Context: Used for semantic similarity searches. Core of vector indexes.
+    │
+    ├── 📄 docstore.json
+    │   └── Purpose: Stores the actual text content and metadata of the original documents/nodes.
+    │       Contains: Mapping from node ID to Node object (text, metadata).
+    │       Context: Used to retrieve the source text/context corresponding to relevant node IDs found via vector search or other index lookups.
+    │
+    ├── 📄 graph_store.json
+    │   └── Purpose: Stores relationships and structure for graph-based indexes (like Knowledge Graphs).
+    │       Contains: Nodes and edges representing entities and their connections.
+    │       Context: Used for graph traversal queries, finding related entities. Often EMPTY if only vector/keyword indexes are used.
+    │
+    ├── 📄 image_vector_store.json
+    │   └── Purpose: Stores vector embeddings specifically for images (in multimodal scenarios).
+    │       Contains: Image embeddings, mapping to image node IDs.
+    │       Context: Used for image similarity search or cross-modal queries. EMPTY if only text data is indexed.
+    │
+    ├── 📄 index_store.json
+    │   └── Purpose: Stores metadata about the index structure(s) themselves. Acts as the "entry point" map.
+    │       Contains: Information about different index types present (vector, keyword, graph) and their corresponding IDs/references within other stores.
+    │       Context: Used by LlamaIndex to understand how the various components (docstore, vector stores, etc.) fit together to reconstruct the complete index(es).

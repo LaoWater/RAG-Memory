@@ -121,7 +121,7 @@ Keep under 3 sentences. Return only the summary."""
             "- If the user seems to ask for a **continuation** or **variation** of a prior idea (e.g., 'Now make it more better' or 'Use X'), rank summaries that reflect this shift or expansion more highly."
         )
         attention_prompt += "\n".join([f"Summary {i+1}: {summary}" for i, summary in enumerate(summaries)])
-        attention_prompt += "\n\n - Return a list of scores for each summary from 1 to 3, with higher scores indicating greater relevance."
+        attention_prompt += "\n\n - Return a list of scores for each summary from 0 to 1, with higher scores indicating greater relevance."
 
         response = gemini_model.generate_content(attention_prompt)
         scores = [float(score) for score in response.text.split() if score.replace('.', '', 1).isdigit()]

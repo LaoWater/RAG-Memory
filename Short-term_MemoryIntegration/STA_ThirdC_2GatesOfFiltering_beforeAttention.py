@@ -4,6 +4,16 @@
 # Now, slowly, we're getting closer to the great Model of the Mind strictly regarding Short-Term Memory
 # (Long-Term needs time-dimension and decay and for H_A is not relevant with priority right now).
 
+# Issue at first Gate - why ?
+# Debugged intimately - found that scores are too low in many cases - of course - for the retrieval lacks understanding and comprehesion.
+# ENTER: Attention ? - Mirroring the Mind, the retrieval, pondering what to retrieve, get full or summary - is happening with continous Attention mechanism.
+# Else, the first cycle example of Generate poem & Continue in second prompt - is not high enough attention to trigger the similarily mechanism
+
+
+#    we Face a big problem brother - the embedding and retrieval is returning small scores even when it should be returning high, like the following debugging output. let's discuss and fix. a............ i think we need some Attention() mechanism, am i right? basically my plan is to ask an LLM to look at
+# >  the summary of all memories and rank them? (Simulate Attention scores) - then based on a score threshold we start retrieving them, with a maximum of 3 memories for exmaple. - then - we will next retrieve based on text embeddings the memory chunks relevant to memory summary + appended user prompt ->
+# >  Finally, compose prompt. Think well about it, we will need to change big parts of the logic. Slowly, with good coding practices in mind and with your imagination open.
+# So this is the bottleneck the LLMs have hit for many, many years. They lacked attention and the multi-dimensional vector embeddings, without context, fail to comprehend complex patterns.
 
 import faiss
 import os
@@ -12,11 +22,11 @@ from sentence_transformers import SentenceTransformer
 import google.generativeai as genai
 from typing import List, Tuple
 
-# Configuration
+# Configuration - Changed to Inner Product (cosine similarity)
 EMBEDDING_MODEL = SentenceTransformer('all-mpnet-base-v2')
 EMBEDDING_SIZE = 768
-FAISS_INDEX_S = faiss.IndexFlatL2(EMBEDDING_SIZE)
-FAISS_INDEX_F = faiss.IndexFlatL2(EMBEDDING_SIZE)
+FAISS_INDEX_S = faiss.IndexFlatIP(EMBEDDING_SIZE)
+FAISS_INDEX_F = faiss.IndexFlatIP(EMBEDDING_SIZE)
 
 # Configure Gemini
 gemini_api_key = os.getenv("GOOGLE_API_KEY")
@@ -37,7 +47,7 @@ class ConversationMemory:
             self.type = memory_type  # 'S' or 'F'
 
     def store_memory(self, text: str, memory_type: str, store_chunks: bool = False):
-        """Store memory with optional chunk-level embeddings"""
+        """Store memory with normalized embeddings"""
         embedding = EMBEDDING_MODEL.encode(text)
         item = self.MemoryItem(
             memory_id=self.current_id,
@@ -47,40 +57,54 @@ class ConversationMemory:
         )
         self.memories.append(item)
 
-        # Store chunk embeddings for full memories
-        if store_chunks and memory_type == 'F':
-            chunks = [c.strip() for c in text.split('\n') if c.strip()]
-            for chunk in chunks:
-                chunk_embedding = EMBEDDING_MODEL.encode(chunk)
-                FAISS_INDEX_F.add(np.array([chunk_embedding]))
+        # Debug: Track memory storage
+        print(f"\n=== Storing {memory_type} Memory [ID:{self.current_id}] ===")
+        print(f"Content: {text}")
+        print(f"Embedding Norm: {np.linalg.norm(embedding):.4f}")
 
-        # Add to main index
+        # Add to appropriate index
         if memory_type == 'S':
             FAISS_INDEX_S.add(np.array([embedding]))
+            print(f"Added to S-index (new size: {FAISS_INDEX_S.ntotal})")
         else:
             FAISS_INDEX_F.add(np.array([embedding]))
+            print(f"Added to F-index (new size: {FAISS_INDEX_F.ntotal})")
 
         self.current_id += 1
 
     def retrieve_memories(self, query_embedding: np.ndarray, memory_type: str,
                           top_k: int = 3, min_similarity: float = 0.2) -> List[Tuple[float, 'MemoryItem']]:
-        """Retrieve memories with similarity filtering"""
+        """Retrieve memories with cosine similarity filtering"""
         scores, indices = self._search_index(query_embedding, memory_type, top_k)
-
         results = []
+
+
         if indices.shape[0] == 0:  # No results
             return results
+
+        # Debug: Show raw search results
+        print(f"\n=== Retrieving {memory_type} Memories ===")
+        print(f"Top {top_k} raw results:")
+
 
 
         for i in range(top_k):
             if indices[0][i] < 0:  # FAISS uses -1 for empty slots
                 continue
+            idx = indices[0][i]
+            if idx >= 0:
+                print(f"Index {idx} - Score: {scores[0][i]:.4f}")
 
-            similarity = 1 - scores[0][i]  # Convert L2 distance to similarity
+
+        for i in range(top_k):
+
+            similarity = scores[0][i]  # Direct use of cosine similarity
             idx = indices[0][i]
 
             if idx < len(self.memories) and similarity >= min_similarity:
                 results.append((similarity, self.memories[idx]))
+                # Debug: Show valid matches
+                print(f"Valid match: ID {self.memories[idx].id} - Similarity: {similarity:.4f}")
 
         return sorted(results, key=lambda x: x[0], reverse=True)
 
@@ -96,7 +120,7 @@ class ConversationMemory:
 class AgenticSystem:
     def __init__(self):
         self.memory = ConversationMemory()
-        self.similarity_threshold = 0.55
+        self.similarity_threshold = 0.44
         self.summarizer_prompt = """Please create a concise summary of this conversation pair that preserves:
 - Core concepts
 - Emotional tone
@@ -105,40 +129,49 @@ class AgenticSystem:
 Keep under 3 sentences. Return only the summary."""
 
     def generate_response(self, user_prompt: str) -> str:
-        # Embed the user prompt
-        prompt_embedding = EMBEDDING_MODEL.encode(user_prompt)
+        print(f"\n{'=' * 30}\nProcessing: {user_prompt}\n{'=' * 30}")
 
-        # Phase 1: Summary Memory Retrieval
+        # Phase 1: Summary Memory Retrieval: No Attention - Functioning STRICTLY on embeddings calculations
+        prompt_embedding = EMBEDDING_MODEL.encode(user_prompt)
+        print(f"\n[Phase 1] Summary Memory Retrieval")
         summary_memories = self.memory.retrieve_memories(
             prompt_embedding, 'S',
             top_k=5,
             min_similarity=self.similarity_threshold + 0.1
         )
+        print(f"Found {len(summary_memories)} relevant summaries")
 
         # Phase 2: Relevance Decision Making
+        print("\n[Phase 2] Relevance Decision")
         retrieval_decision = self._should_retrieve_full(
             user_prompt,
             [m[1] for m in summary_memories]
         )
+        print(f"Full retrieval needed? {retrieval_decision}")
 
         # Phase 3: Detailed Memory Retrieval
         full_context = []
         if retrieval_decision:
+            print("\n[Phase 3] Detailed Memory Retrieval")
             raw_full_memories = self.memory.retrieve_memories(
                 prompt_embedding, 'F',
                 top_k=10,
                 min_similarity=self.similarity_threshold - 0.1
             )
+            print(f"Found {len(raw_full_memories)} full memories")
             full_context = self._filter_memory_chunks(
                 user_prompt,
                 prompt_embedding,
                 raw_full_memories
             )
+            print(f"Selected {len(full_context)} relevant chunks")
 
         # Build Context Hierarchy
         context = self._build_context(user_prompt, summary_memories, full_context)
 
         # Generate Response
+        print("\n[Generation] Using context:")
+        for c in context: print(f"| {c}")
         response = gemini_model.generate_content("\n\n".join(context))
 
         # Store Interaction
@@ -164,53 +197,54 @@ Respond ONLY with 'YES' or 'NO'."""
                               full_memories: List[Tuple[float, ConversationMemory.MemoryItem]]) -> List[str]:
         """Chunk-level relevance filtering"""
         relevant_chunks = []
+        query_norm = np.linalg.norm(query_embedding)
 
         for score, memory in full_memories:
+            print(f"\nProcessing memory {memory.id}:")
             chunks = [
                 chunk.strip()
                 for chunk in memory.content.split('\n')
                 if chunk.strip()
             ]
+            print(f"Found {len(chunks)} chunks")
 
             for chunk in chunks:
                 chunk_embedding = EMBEDDING_MODEL.encode(chunk)
                 similarity = np.dot(query_embedding, chunk_embedding) / (
-                        np.linalg.norm(query_embedding) *
-                        np.linalg.norm(chunk_embedding)
+                        query_norm * np.linalg.norm(chunk_embedding)
                 )
 
                 if similarity > self.similarity_threshold:
+                    print(f"Chunk match: {similarity:.2f} - {chunk}")
                     relevant_chunks.append((
                         similarity,
                         f"[Relevance: {similarity:.2f}] {chunk}"
                     ))
 
-        # Return top 3 most relevant chunks
         return [c[1] for c in sorted(relevant_chunks, reverse=True)[:3]]
 
     def _build_context(self, prompt: str, summary_memories: List,
                        full_chunks: List[str]) -> List[str]:
         """Structured context assembly"""
         context = []
-
         if summary_memories:
             context.append("## High-Level Context (Summaries)")
             context += [
                 f"Summary {i + 1} [Confidence: {m[0]:.2f}]: {m[1].content}"
-                for i, m in enumerate(summary_memories[:3])  # Top 3 summaries
+                for i, m in enumerate(summary_memories[:3])
             ]
 
         if full_chunks:
             context.append("\n## Detailed Context (Relevant Excerpts)")
-            context += full_chunks[:3]  # Top 3 chunks
+            context += full_chunks[:3]
 
         context.append(f"\n## Current Query\n{prompt}")
         return context
 
     def _store_conversation_pair(self, prompt: str, response: str):
-        """Store conversation with chunk-aware embedding"""
+        """Store conversation pair with proper indexing"""
         full_text = f"User: {prompt}\nAgent: {response}"
-        self.memory.store_memory(full_text, 'F', store_chunks=True)
+        self.memory.store_memory(full_text, 'F')
 
         # Generate and store summary
         summary = gemini_model.generate_content(self.summarizer_prompt + full_text)
@@ -222,7 +256,7 @@ def main():
 
     print("=== First Interaction ===")
     response1 = agent.generate_response("Hello. Poem about the meaning of life in 2 verses.")
-    print(f"Response:\n{response1}\n")
+    print(f"\n Response:\n{response1}\n")
 
     print("=== Second Interaction ===")
     response2 = agent.generate_response("Now make it more hopeful, using ocean metaphors.")
@@ -235,4 +269,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
