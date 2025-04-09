@@ -1,3 +1,11 @@
+"""
+LlamaIndex integration with Gemini, using llamaindex gemini library (high-level setup)
+
+Here we also simulate production-like deployment, where the embedded document indexing is saved for ease of access at inference time
+
+"""
+
+
 import os
 import logging # Optional: for more detailed logs
 import sys   # Optional: for detailed logs

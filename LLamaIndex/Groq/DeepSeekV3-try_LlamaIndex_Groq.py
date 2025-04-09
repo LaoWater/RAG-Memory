@@ -1,40 +1,24 @@
+"""
+- Using Llama_index specific Groq high-level library.
+Things have 10x simplified
+"""
+
 import os
-from dotenv import load_dotenv
-from groq import Groq
 from llama_index.core import VectorStoreIndex, SimpleDirectoryReader, Settings
 from llama_index.llms.groq import Groq as GroqLLM
 
-# Load environment variables
-load_dotenv()
-
-
-class GroqInference:
-    def __init__(self, model_name: str):
-        self.client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
-        self.model_name = model_name
-
-    def generate(self, prompt: str) -> str:
-        chat_completion = self.client.chat.completions.create(
-            messages=[{"role": "user", "content": prompt}],
-            model=self.model_name,
-            temperature=0.1,
-            max_tokens=1024
-        )
-        return chat_completion.choices[0].message.content
-
 
 def main():
-    # Initialize Groq with Llama3-70B
-    groq_llm = GroqInference(model_name="llama3-70b-8192")
-
+    print("Setting up Groq LLM in llama_index settings...")
     # Configure LlamaIndex settings
     Settings.llm = GroqLLM(
-        model="llama3-70b-8192",
+        model="meta-llama/llama-4-scout-17b-16e-instruct",
         api_key=os.environ.get("GROQ_API_KEY"),
         temperature=0.1,
         max_tokens=1024
     )
 
+    print("Reading, Indexing and Embedding document...")
     # Load data from data.txt in current directory
     documents = SimpleDirectoryReader(input_files=["data.txt"]).load_data()
 
@@ -45,10 +29,11 @@ def main():
     query_engine = index.as_query_engine()
 
     # Perform query using document context
-    query = "Based on the document, write a philosophical poem about the meaning of life in two verses."
+    query = "Based on the document, write a one-verse poem about Coconuts and AI."
+    print("Generating Inference..")
     response = query_engine.query(query)
 
-    print("Context-based Poem:")
+    print("Context-based Response:")
     print(response.response)
 
     # # Direct inference example without context
