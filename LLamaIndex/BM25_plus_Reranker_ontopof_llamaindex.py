@@ -1,3 +1,25 @@
+"""
+🔍 Enhanced RAG Pipeline with Hybrid Retrieval + Reranking
+
+This script upgrades a basic LlamaIndex RAG setup (vector-only) by adding:
+
+1. ✅ BM25 Retrieval (keyword-based) – fast, exact-match retriever for grounding queries.
+2. ✅ Hybrid Retriever – combines BM25 and vector search to improve relevance.
+3. ✅ SentenceTransformer Reranker – reorders results using a cross-encoder model for deeper contextual match.
+
+🏁 Why this matters:
+- Vector-only systems often return fuzzy or irrelevant context.
+- BM25 ensures important keywords aren’t missed (e.g., "not", "never").
+- Reranking selects the most contextually relevant chunks for the LLM.
+- Overall: less hallucination, better factual grounding, improved quality.
+
+🎯 Real-world use cases:
+- Enterprise Q&A over internal docs
+- Legal/medical retrieval where exact match matters
+- Assistant memory systems with fast, reliable access to past context
+"""
+
+
 import os
 import logging
 import sys
