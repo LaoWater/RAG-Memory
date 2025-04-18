@@ -99,3 +99,4 @@ print(f"\nQuerying index: '{query2}'")
 response2 = query_engine.query(query2)
 print("\nResponse:")
 print(response2)
+
