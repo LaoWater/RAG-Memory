@@ -1,5 +1,5 @@
 {
-  "version": "1.0.0",
+  "version": "1.0.00",
   "changelog": "- UI refresh: new icons, hover effects, color tweaks\n- Merged record/stop buttons for cleaner UX\n- Window size, mic, playback, and monitor setup now persist across sessions\n- Added minimize button and basic theming\n- Hotkey system simplified (work in progress)",
   "download_url": "https://github.com/LaoWater/RAG-Memory/releases/download/Release/Hidden_Assistant_v1.0.0.7z"
 }
