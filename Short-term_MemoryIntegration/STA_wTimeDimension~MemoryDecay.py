@@ -1,3 +1,7 @@
+# Enter - Time Decayed Memories - as conversation goes on
+# # Yet this is another level not relevant to be explored now.
+#
+
 import faiss
 import numpy as np
 from datetime import datetime

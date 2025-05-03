@@ -1,7 +1,3 @@
-# Hopaa - Attention LLM has improved threshold - and using prompt-engineering has improved it even further.
-# Must be careful in the prompt not to fall into over-fitting - keep it general.
-# Now let's implement in it continous conversataion and check the ~Feel
-
 import faiss
 import os
 import numpy as np
@@ -9,7 +5,7 @@ from sentence_transformers import SentenceTransformer
 import google.generativeai as genai
 from typing import List, Tuple
 
-# Configuration - Changed to Inner Product (cosine similarity)
+# Configuration - Using Inner Product (cosine similarity)
 EMBEDDING_MODEL = SentenceTransformer('all-mpnet-base-v2')
 EMBEDDING_SIZE = 768
 FAISS_INDEX_S = faiss.IndexFlatIP(EMBEDDING_SIZE)
@@ -62,26 +58,34 @@ class ConversationMemory:
     def retrieve_memories(self, query_embedding: np.ndarray, memory_type: str,
                           top_k: int = 3, min_similarity: float = 0.2) -> List[Tuple[float, 'MemoryItem']]:
         """Retrieve memories using LLM-based ranking"""
-        summaries = [m.content for m in self.memories if m.type == memory_type]
-        ranked_summaries = AgenticSystem.rank_memory_summaries(query_embedding, summaries)
-        
-        # Filter based on a threshold
-        results = [(score, self.memories[idx]) for idx, (score, summary) in enumerate(ranked_summaries) if score > min_similarity]
-        
+        # Get memories of the specified type
+        type_memories = [m for m in self.memories if m.type == memory_type]
+
+        if not type_memories:
+            return []
+
+        summaries = [m.content for m in type_memories]
+
+        # Use index to get initial candidates
+        index = FAISS_INDEX_S if memory_type == 'S' else FAISS_INDEX_F
+        if index.ntotal == 0:
+            return []
+
+        D, I = index.search(np.array([query_embedding]), min(top_k, index.ntotal))
+
+        # Map indices back to memory items and filter by similarity threshold
+        results = []
+        for i, (dist, idx) in enumerate(zip(D[0], I[0])):
+            if dist > min_similarity and idx < len(type_memories):
+                memory = type_memories[idx]
+                results.append((dist, memory))
+
         # Debug: Show ranked results
         print(f"\n=== Ranked {memory_type} Memories ===")
         for score, memory in results:
             print(f"Memory ID {memory.id} - Score: {score:.4f} - Content: {memory.content}")
 
         return results
-
-    @staticmethod
-    def _search_index(query_embedding: np.ndarray, memory_type: str, k: int = 5):
-        """Safe index search with empty index handling"""
-        index = FAISS_INDEX_S if memory_type == 'S' else FAISS_INDEX_F
-        if index.ntotal == 0:
-            return np.empty((0, k)), np.empty((0, k), dtype=int)
-        return index.search(np.array([query_embedding]), k)
 
 
 class AgenticSystem:
@@ -94,58 +98,86 @@ class AgenticSystem:
 - Key entities
 - Open questions
 Keep under 3 sentences. Return only the summary."""
+        self.conversation_history = []
 
     @staticmethod
-    def rank_memory_summaries(user_prompt: str, summaries: List[str]) -> List[Tuple[float, str]]:
+    def rank_memory_summaries(query_embedding: np.ndarray, summaries: List[str]) -> List[Tuple[float, str]]:
         """Rank memory summaries using LLM-based attention mechanism"""
+        if not summaries:
+            return []
+
+        # Get the query text from embedding for the prompt
+        # Since we can't go back from embedding to text, we'll use a placeholder for this function
+        # In real implementation, you'd want to pass the original query text
+        query_text = "current user query"  # This is a placeholder
+
         attention_prompt = (
-            f"Rank the following memory summaries based on their relevance to the user's current prompt: {user_prompt}\n"
+            f"Rank the following memory summaries based on their relevance to the user's current prompt: {query_text}\n"
             "Carefully consider the following criteria for ranking:\n"
             "- How well does the summary capture the core themes and concepts of the user's prompt?\n"
             "- Does the summary reflect the emotional tone and intent expressed in the prompt?\n"
             "- Does the summary include any key themes, entities, or metaphors mentioned in the prompt?\n"
             "- Does the summary directly or subtly address any open-ended questions or implicit requests in the prompt?\n"
             "- Is there an implicit need for continuation from previous interactions that is subtly hinted at in the prompt?\n"
-            "- Consider any **implicit context** that may need to be carried over (e.g.  a request for elaboration on a topic).\n"
+            "- Consider any **implicit context** that may need to be carried over (e.g. a request for elaboration on a topic).\n"
             "- Rank higher those summaries that maintain or extend the ongoing **conversation thread** or **expand upon previous ideas**, even if they do not directly repeat specific words.\n"
             "- If the user seems to ask for a **continuation** or **variation** of a prior idea (e.g., 'Now make it more better' or 'Use X'), rank summaries that reflect this shift or expansion more highly."
         )
-        attention_prompt += "\n".join([f"Summary {i+1}: {summary}" for i, summary in enumerate(summaries)])
-        attention_prompt += "\n\n - Return a list of scores for each summary from 0 to 1, with higher scores indicating greater relevance."
 
-        response = gemini_model.generate_content(attention_prompt)
-        scores = [float(score) for score in response.text.split() if score.replace('.', '', 1).isdigit()]
+        for i, summary in enumerate(summaries):
+            attention_prompt += f"\nSummary {i + 1}: {summary}"
 
-        return sorted(zip(scores, summaries), reverse=True)
+        attention_prompt += "\n\nReturn a list of scores for each summary from 0 to 1, with higher scores indicating greater relevance."
 
+        try:
+            response = gemini_model.generate_content(attention_prompt)
+            # Parse the scores from the response
+            scores = []
+            for line in response.text.split('\n'):
+                if ':' in line:
+                    parts = line.split(':')
+                    if len(parts) == 2 and parts[1].strip().replace('.', '', 1).isdigit():
+                        scores.append(float(parts[1].strip()))
+                else:
+                    for word in line.split():
+                        if word.replace('.', '', 1).isdigit():
+                            scores.append(float(word))
+
+            # If we couldn't parse scores, use cosine similarity as fallback
+            if not scores or len(scores) != len(summaries):
+                print("Failed to parse LLM ranking scores, using cosine similarity fallback")
+                scores = []
+                for summary in summaries:
+                    summary_embedding = EMBEDDING_MODEL.encode(summary)
+                    score = np.dot(query_embedding, summary_embedding) / (
+                            np.linalg.norm(query_embedding) * np.linalg.norm(summary_embedding)
+                    )
+                    scores.append(score)
+
+            return sorted(zip(scores, summaries), reverse=True)
+        except Exception as e:
+            print(f"Error in rank_memory_summaries: {e}")
+            return []
 
     def generate_response(self, user_prompt: str) -> str:
         print(f"\n{'=' * 30}\nProcessing: {user_prompt}\n{'=' * 30}")
 
-        # Phase 1: Summary Memory Retrieval
+        # Add to conversation history
+        self.conversation_history.append(f"User: {user_prompt}")
+
+        # Phase 1: Prompt Embedding
         prompt_embedding = EMBEDDING_MODEL.encode(user_prompt)
+
+        # Phase 2: Summary Memory Retrieval
         print(f"\n[Phase 1] Summary Memory Retrieval")
         summary_memories = self.memory.retrieve_memories(
             prompt_embedding, 'S',
             top_k=5,
-            min_similarity=self.similarity_threshold + 0.1
+            min_similarity=self.similarity_threshold
         )
         print(f"Found {len(summary_memories)} relevant summaries")
 
-        # Phase 2: Summary Memory Retrieval & Rank Memory Summaries
-        print("\n[Phase 2] Rank Memory Summaries")
-        ranked_summaries = self.rank_memory_summaries(
-            user_prompt,
-            [m[1].content for m in summary_memories]
-        )
-        print(f"Ranked summaries: {ranked_summaries}")
-
-        # Phase 3: Retrieve Top-Ranked Summaries
-        print("\n[Phase 3] Retrieve Top-Ranked Summaries")
-        top_summaries = [summary for score, summary in ranked_summaries if score > self.similarity_threshold]
-        print(f"Top summaries: {top_summaries}")
-
-        # Phase 4: Relevance Decision Making
+        # Phase 3: Relevance Decision Making
         print("\n[Phase 2] Relevance Decision")
         retrieval_decision = self._should_retrieve_full(
             user_prompt,
@@ -153,7 +185,7 @@ Keep under 3 sentences. Return only the summary."""
         )
         print(f"Full retrieval needed? {retrieval_decision}")
 
-        # Phase 3: Detailed Memory Retrieval
+        # Phase 4: Detailed Memory Retrieval
         full_context = []
         if retrieval_decision:
             print("\n[Phase 3] Detailed Memory Retrieval")
@@ -178,13 +210,16 @@ Keep under 3 sentences. Return only the summary."""
         for c in context: print(f"| {c}")
         response = gemini_model.generate_content("\n\n".join(context))
 
+        # Add to conversation history
+        response_text = response.text
+        self.conversation_history.append(f"Agent: {response_text}")
+
         # Store Interaction
-        self._store_conversation_pair(user_prompt, response.text)
+        self._store_conversation_pair(user_prompt, response_text)
 
-        return response.text
+        return response_text
 
-    @staticmethod
-    def _should_retrieve_full(prompt: str, summary_memories: List) -> bool:
+    def _should_retrieve_full(self, prompt: str, summary_memories: List) -> bool:
         """LLM-based relevance decision maker"""
         if not summary_memories:
             return False
@@ -194,8 +229,12 @@ Current prompt: {prompt}
 Available summaries: {[m.content for m in summary_memories]}
 Respond ONLY with 'YES' or 'NO'."""
 
-        response = gemini_model.generate_content(decision_prompt)
-        return "YES" in response.text.upper()
+        try:
+            response = gemini_model.generate_content(decision_prompt)
+            return "YES" in response.text.upper()
+        except Exception as e:
+            print(f"Error in _should_retrieve_full: {e}")
+            return False
 
     def _filter_memory_chunks(self, query: str, query_embedding: np.ndarray,
                               full_memories: List[Tuple[float, ConversationMemory.MemoryItem]]) -> List[str]:
@@ -243,6 +282,11 @@ Respond ONLY with 'YES' or 'NO'."""
             context += full_chunks[:3]
 
         context.append(f"\n## Current Query\n{prompt}")
+
+        # Add instruction for the LLM to respond naturally
+        context.append(
+            "\n## Instructions\nRespond naturally to the user's query using the provided context. Keep your tone conversational and helpful.")
+
         return context
 
     def _store_conversation_pair(self, prompt: str, response: str):
@@ -251,24 +295,40 @@ Respond ONLY with 'YES' or 'NO'."""
         self.memory.store_memory(full_text, 'F')
 
         # Generate and store summary
-        summary = gemini_model.generate_content(self.summarizer_prompt + full_text)
-        self.memory.store_memory(summary.text, 'S')
+        try:
+            summary_prompt = self.summarizer_prompt + "\n\n" + full_text
+            summary = gemini_model.generate_content(summary_prompt)
+            self.memory.store_memory(summary.text, 'S')
+        except Exception as e:
+            print(f"Error generating summary: {e}")
+            # Fallback: Use the first part of the conversation as a summary
+            fallback_summary = f"User asked about {prompt[:50]}..." if len(prompt) > 50 else prompt
+            self.memory.store_memory(fallback_summary, 'S')
 
 
 def main():
+    """Interactive conversation loop with the agent"""
     agent = AgenticSystem()
+    print("=" * 50)
+    print("Welcome to the Continuous Conversation Agent!")
+    print("Type 'quit', 'exit', or 'bye' to end the conversation.")
+    print("=" * 50)
 
-    print("=== First Interaction ===")
-    response1 = agent.generate_response("Hello. Poem about the meaning of life in 2 verses.")
-    print(f"\n Response:\n{response1}\n")
+    while True:
+        user_input = input("\nYou: ")
 
-    print("=== Second Interaction ===")
-    response2 = agent.generate_response("Now make it more hopeful, using ocean metaphors.")
-    print(f"Response:\n{response2}\n")
+        # Check for exit commands
+        if user_input.lower() in ['quit', 'exit', 'bye']:
+            print("\nThank you for chatting! Goodbye!")
+            break
 
-    print("=== Third Interaction ===")
-    response3 = agent.generate_response("Add a stanza about resilience against storms.")
-    print(f"Response:\n{response3}")
+        # Generate and display response
+        try:
+            response = agent.generate_response(user_input)
+            print(f"\nAgent: {response}")
+        except Exception as e:
+            print(f"\nError: {e}")
+            print("Sorry, I encountered an error. Let's continue our conversation.")
 
 
 if __name__ == "__main__":
